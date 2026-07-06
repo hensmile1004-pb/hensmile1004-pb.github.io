@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>점포 동선 최적화</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #F5F6F5;
+    --panel: #FFFFFF;
+    --ink: #171B1E;
+    --sub: #5C6570;
+    --line: #E1E4E1;
+    --accent: #2F4B7C;
+    --accent-2: #D8A31A;
+    --start: #1E8A5B;
+    --end: #C0392B;
+    --wpt: #2F4B7C;
+    --danger: #C0392B;
+    --mono: 'JetBrains Mono', monospace;
+    --disp: 'Sora', sans-serif;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--disp);
+    -webkit-font-smoothing:antialiased;
+  }
+  header.app{
+    padding:22px 28px 18px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+    display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  header.app h1{
+    font-size:20px; font-weight:800; margin:0; letter-spacing:-0.02em;
+  }
+  header.app h1 .num{
+    display:inline-block; width:8px; height:8px; border-radius:2px;
+    background:var(--accent-2); margin-right:8px; transform:translateY(-1px);
+  }
+  header.app .tag{ font-size:12.5px; color:var(--sub); font-family:var(--mono); }
+  .settings-toggle{
+    font-family:var(--mono); font-size:12px; color:var(--accent);
+    background:none; border:1px solid var(--line); border-radius:6px;
+    padding:6px 10px; cursor:pointer;
+  }
+  .settings-toggle:hover{ border-color:var(--accent); }
+
+  #settingsPanel{
+    max-width:1400px; margin:0 auto; padding:0 28px;
+  }
+  .settings-box{
+    display:none; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--radius); padding:16px 18px; margin:14px 0; font-size:13px;
+  }
+  .settings-box.open{ display:block; }
+  .settings-box h3{ margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--sub); }
+  .settings-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
+  .settings-row input[type=text]{
+    flex:1; min-width:220px; padding:8px 10px; border:1px solid var(--line);
+    border-radius:6px; font-family:var(--mono); font-size:12.5px;
+  }
+  .settings-row label{ font-size:12.5px; color:var(--sub); min-width:110px; }
+  .help{ font-size:12px; color:var(--sub); line-height:1.6; margin-top:6px; }
+  .help a{ color:var(--accent); }
+  .help code{ background:#EFF1EE; padding:1px 5px; border-radius:4px; }
+
+  main{
+    max-width:1400px; margin:0 auto; padding:22px 28px 60px;
+    display:grid; grid-template-columns: 380px 1fr 300px; gap:18px;
+  }
+  @media (max-width: 1100px){ main{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 16px 18px;
+  }
+  .panel h2{
+    font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--sub);
+    margin:0 0 12px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .storeRow{
+    border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px;
+    display:flex; flex-direction:column; gap:6px; position:relative;
+  }
+  .storeRow.role-start{ border-color:var(--start); background:#F1FAF5; }
+  .storeRow.role-end{ border-color:var(--end); background:#FBF1F0; }
+  .storeRow input[type=text]{
+    border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:13px;
+    font-family:var(--disp); width:100%;
+  }
+  .storeRow .addr{ font-family:var(--mono); font-size:12px; }
+  .rowTop{ display:flex; gap:6px; align-items:center; }
+  .rowTop .name{ flex:1; font-weight:600; }
+  .roleTag{
+    font-family:var(--mono); font-size:10.5px; font-weight:600; padding:2px 6px;
+    border-radius:4px; letter-spacing:.03em;
+  }
+  .roleTag.start{ background:var(--start); color:#fff; }
+  .roleTag.end{ background:var(--end); color:#fff; }
+  .roleTag.wpt{ background:#EEF1F6; color:var(--wpt); }
+  .rowBtns{ display:flex; gap:4px; }
+  .miniBtn{
+    font-family:var(--mono); font-size:10.5px; border:1px solid var(--line);
+    background:#fff; border-radius:5px; padding:4px 6px; cursor:pointer; color:var(--sub);
+  }
+  .miniBtn:hover{ border-color:var(--accent); color:var(--accent); }
+  .miniBtn.del:hover{ border-color:var(--danger); color:var(--danger); }
+  .geoStatus{ font-family:var(--mono); font-size:10.5px; }
+  .geoStatus.ok{ color:var(--start); }
+  .geoStatus.pending{ color:var(--sub); }
+  .geoStatus.err{ color:var(--danger); }
+
+  .bigBtn{
+    width:100%; padding:10px; border-radius:8px; border:none; cursor:pointer;
+    font-family:var(--disp); font-weight:700; font-size:13.5px; margin-top:4px;
+  }
+  .bigBtn.primary{ background:var(--accent); color:#fff; }
+  .bigBtn.primary:hover{ background:#243c66; }
+  .bigBtn.ghost{ background:none; border:1px solid var(--line); color:var(--ink); }
+  .bigBtn.ghost:hover{ border-color:var(--accent); color:var(--accent); }
+  .bigBtn:disabled{ opacity:.45; cursor:not-allowed; }
+
+  .toolRow{ display:flex; gap:8px; margin-bottom:10px; }
+  .toolRow .bigBtn{ margin-top:0; }
+
+  #map{ width:100%; height:640px; border-radius:8px; background:#EAECEA; }
+  .mapNote{ font-family:var(--mono); font-size:11px; color:var(--sub); margin-top:8px; }
+
+  /* timeline */
+  .tl{ position:relative; padding-left:22px; }
+  .tl-item{ position:relative; padding-bottom:20px; }
+  .tl-item:last-child{ padding-bottom:0; }
+  .tl-item::before{
+    content:''; position:absolute; left:-18px; top:3px; width:10px; height:10px;
+    border-radius:50%; background:var(--wpt); border:2px solid #fff; box-shadow:0 0 0 1px var(--line);
+  }
+  .tl-item.start::before{ background:var(--start); }
+  .tl-item.end::before{ background:var(--end); }
+  .tl-item::after{
+    content:''; position:absolute; left:-14px; top:14px; width:1px; bottom:-4px;
+    background:var(--line);
+  }
+  .tl-item:last-child::after{ display:none; }
+  .tl-name{ font-weight:700; font-size:13px; }
+  .tl-addr{ font-family:var(--mono); font-size:11px; color:var(--sub); }
+  .tl-seg{ font-family:var(--mono); font-size:11px; color:var(--accent-2); margin-top:3px; }
+  .tl-total{
+    margin-top:14px; padding-top:12px; border-top:1px dashed var(--line);
+    font-family:var(--mono); font-size:12.5px; font-weight:600;
+  }
+  .emptyMsg{ font-size:12.5px; color:var(--sub); line-height:1.6; }
+  textarea#txtImport{
+    width:100%; height:80px; font-family:var(--mono); font-size:12px;
+    border:1px solid var(--line); border-radius:6px; padding:8px;
+  }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div>
+    <h1><span class="num"></span>점포 동선 최적화</h1>
+    <div class="tag">출발·도착 고정 · 중간 경유지 자동 최적화 · 카카오맵 기반</div>
+  </div>
+  <button class="settings-toggle" onclick="toggleSettings()">API 키 설정 ▾</button>
+</header>
+
+<div id="settingsPanel">
+  <div class="settings-box" id="settingsBox">
+    <h3>카카오맵 연동 설정</h3>
+    <div class="settings-row">
+      <label>JS 키 (지도 표시용)</label>
+      <input type="text" id="kakaoJsKey" placeholder="Kakao Developers &gt; 앱 키 &gt; JavaScript 키">
+    </div>
+    <div class="settings-row">
+      <label>REST 키 (주소 검색용)</label>
+      <input type="text" id="kakaoRestKey" placeholder="Kakao Developers &gt; 앱 키 &gt; REST API 키">
+    </div>
+    <div class="settings-row">
+      <button class="bigBtn primary" style="width:auto;margin-top:0;" onclick="saveKeysAndLoad()">저장하고 지도 불러오기</button>
+      <span id="keyStatus" class="geoStatus pending"></span>
+    </div>
+    <div class="help">
+      키는 <a href="https://developers.kakao.com" target="_blank">Kakao Developers</a>에서 무료로 발급받습니다 (앱 생성 → 앱 키).<br>
+      이 파일을 웹서버로 열 경우(예: <code>localhost:8000</code>), 카카오 개발자 콘솔의 <b>[플랫폼 → Web]</b>에 해당 도메인을 반드시 등록해야 지도가 표시됩니다.<br>
+      파일을 더블클릭해 <code>file://</code>로 열면 도메인 등록이 되지 않아 지도가 뜨지 않을 수 있습니다 — 그럴 경우 <code>python -m http.server</code> 등으로 로컬 서버를 띄운 뒤 그 주소를 등록하세요.<br>
+      키는 이 브라우저의 로컬 저장소에만 저장되며 외부로 전송되지 않습니다.
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- LEFT: store table -->
+  <section class="panel">
+    <h2>점포 리스트 <span id="storeCount" style="font-weight:400;"></span></h2>
+
+    <div id="storeList"></div>
+
+    <button class="bigBtn ghost" onclick="addStore()">+ 점포 추가</button>
+
+    <details style="margin-top:14px;">
+      <summary style="font-size:12px;color:var(--sub);cursor:pointer;font-family:var(--mono);">txt로 일괄 불러오기 / 내보내기</summary>
+      <div style="margin-top:8px;">
+        <textarea id="txtImport" placeholder="한 줄에 하나씩: 점포명,주소&#10;예) 강남점,서울 강남구 테헤란로 152"></textarea>
+        <div class="toolRow" style="margin-top:6px;">
+          <button class="bigBtn ghost" onclick="importTxt()">불러오기</button>
+          <button class="bigBtn ghost" onclick="exportTxt()">내보내기</button>
+        </div>
+      </div>
+    </details>
+
+    <div class="toolRow" style="margin-top:14px; flex-direction:column; gap:8px;">
+      <button class="bigBtn ghost" id="geocodeBtn" onclick="geocodeAll()">전체 주소 좌표 확인</button>
+      <button class="bigBtn primary" id="routeBtn" onclick="computeAndDraw()">최적 동선 계산</button>
+    </div>
+    <div class="mapNote" id="calcNote"></div>
+  </section>
+
+  <!-- CENTER: map -->
+  <section class="panel">
+    <h2>지도</h2>
+    <div id="map"></div>
+    <div class="mapNote">경유지는 <b>직선 최단거리(Haversine)</b> 기준으로 순서를 최적화해 표시합니다. 실제 도로 경로가 아닌 방문 순서 최적화 결과입니다.</div>
+  </section>
+
+  <!-- RIGHT: timeline -->
+  <section class="panel">
+    <h2>이동 동선</h2>
+    <div id="timeline">
+      <p class="emptyMsg">점포를 등록하고 출발·도착을 지정한 뒤 '최적 동선 계산'을 누르면 순서가 표시됩니다.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ---------------- state ---------------- */
+let stores = [];      // {id, name, address, role, lat, lng, geo:'idle'|'pending'|'ok'|'err'}
+let map = null, kakaoLoaded = false;
+let markers = [], polyline = null;
+
+const LS_STORES = 'route_opt_stores_v1';
+const LS_JSKEY = 'route_opt_kakao_js';
+const LS_RESTKEY = 'route_opt_kakao_rest';
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_STORES);
+    stores = raw ? JSON.parse(raw) : [];
+  }catch(e){ stores = []; }
+  if(stores.length === 0){
+    stores = [
+      {id:uid(), name:'강남 본점', address:'서울 강남구 테헤란로 152', role:'start', lat:null,lng:null,geo:'idle'},
+      {id:uid(), name:'홍대점', address:'서울 마포구 양화로 165', role:'waypoint', lat:null,lng:null,geo:'idle'},
+      {id:uid(), name:'잠실점', address:'서울 송파구 올림픽로 240', role:'end', lat:null,lng:null,geo:'idle'}
+    ];
+  }
+  document.getElementById('kakaoJsKey').value = localStorage.getItem(LS_JSKEY) || '';
+  document.getElementById('kakaoRestKey').value = localStorage.getItem(LS_RESTKEY) || '';
+}
+function persist(){ localStorage.setItem(LS_STORES, JSON.stringify(stores)); }
+
+/* ---------------- settings ---------------- */
+function toggleSettings(){
+  document.getElementById('settingsBox').classList.toggle('open');
+}
+function saveKeysAndLoad(){
+  const js = document.getElementById('kakaoJsKey').value.trim();
+  const rest = document.getElementById('kakaoRestKey').value.trim();
+  localStorage.setItem(LS_JSKEY, js);
+  localStorage.setItem(LS_RESTKEY, rest);
+  const st = document.getElementById('keyStatus');
+  if(!js){ st.textContent='JS 키를 입력하세요'; st.className='geoStatus err'; return; }
+  st.textContent='지도 불러오는 중...'; st.className='geoStatus pending';
+  loadKakaoSdk(js, ()=>{
+    st.textContent='지도 로드 완료'; st.className='geoStatus ok';
+    initMap();
+  }, ()=>{
+    st.textContent='로드 실패 - 도메인 등록/키를 확인하세요'; st.className='geoStatus err';
+  });
+}
+function loadKakaoSdk(jsKey, onOk, onErr){
+  if(window.kakao && window.kakao.maps){ onOk(); return; }
+  const existing = document.getElementById('kakaoSdkScript');
+  if(existing) existing.remove();
+  const s = document.createElement('script');
+  s.id = 'kakaoSdkScript';
+  s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${jsKey}&autoload=false&libraries=services`;
+  s.onload = () => {
+    if(window.kakao && kakao.maps){
+      kakao.maps.load(()=>{ kakaoLoaded = true; onOk(); });
+    } else { onErr(); }
+  };
+  s.onerror = onErr;
+  document.head.appendChild(s);
+}
+function initMap(){
+  const container = document.getElementById('map');
+  map = new kakao.maps.Map(container, {
+    center: new kakao.maps.LatLng(37.5665, 126.9780),
+    level: 8
+  });
+}
+
+/* ---------------- store list rendering ---------------- */
+function renderStores(){
+  const wrap = document.getElementById('storeList');
+  wrap.innerHTML = '';
+  document.getElementById('storeCount').textContent = `(${stores.length})`;
+  stores.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'storeRow role-' + s.role;
+    const tagLabel = s.role==='start' ? '출발' : (s.role==='end' ? '도착' : '경유');
+    const tagClass = s.role==='start' ? 'start' : (s.role==='end' ? 'end' : 'wpt');
+    row.innerHTML = `
+      <div class="rowTop">
+        <input class="name" type="text" value="${escapeHtml(s.name)}" placeholder="점포명" data-field="name">
+        <span class="roleTag ${tagClass}">${tagLabel}</span>
+      </div>
+      <input class="addr" type="text" value="${escapeHtml(s.address)}" placeholder="주소 (도로명/지번)" data-field="address">
+      <div class="rowTop">
+        <span class="geoStatus ${s.geo==='ok'?'ok':(s.geo==='err'?'err':'pending')}">${geoLabel(s)}</span>
+        <div class="rowBtns">
+          <button class="miniBtn" data-act="start">출발지정</button>
+          <button class="miniBtn" data-act="end">도착지정</button>
+          <button class="miniBtn" data-act="waypoint">경유지정</button>
+          <button class="miniBtn del" data-act="del">삭제</button>
+        </div>
+      </div>
+    `;
+    row.querySelector('[data-field="name"]').addEventListener('input', e=>{
+      s.name = e.target.value; persist();
+    });
+    const addrInput = row.querySelector('[data-field="address"]');
+    addrInput.addEventListener('input', e=>{ s.address = e.target.value; s.geo='idle'; s.lat=null; s.lng=null; persist(); });
+    addrInput.addEventListener('blur', ()=>{ if(s.address.trim()) geocodeOne(s).then(renderStores); });
+
+    row.querySelector('[data-act="start"]').addEventListener('click', ()=>{ setRole(s.id,'start'); });
+    row.querySelector('[data-act="end"]').addEventListener('click', ()=>{ setRole(s.id,'end'); });
+    row.querySelector('[data-act="waypoint"]').addEventListener('click', ()=>{ setRole(s.id,'waypoint'); });
+    row.querySelector('[data-act="del"]').addEventListener('click', ()=>{
+      stores = stores.filter(x=>x.id!==s.id); persist(); renderStores();
+    });
+    wrap.appendChild(row);
+  });
+}
+function geoLabel(s){
+  if(s.geo==='ok') return `좌표 확인됨 (${s.lat.toFixed(4)}, ${s.lng.toFixed(4)})`;
+  if(s.geo==='err') return '주소 인식 실패';
+  if(s.geo==='pending') return '확인 중...';
+  return '좌표 미확인';
+}
+function setRole(id, role){
+  if(role==='start') stores.forEach(s=>{ if(s.role==='start') s.role='waypoint'; });
+  if(role==='end') stores.forEach(s=>{ if(s.role==='end') s.role='waypoint'; });
+  stores.forEach(s=>{ if(s.id===id) s.role = role; });
+  persist(); renderStores();
+}
+function escapeHtml(str){
+  return (str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function addStore(){
+  stores.push({id:uid(), name:'', address:'', role:'waypoint', lat:null,lng:null,geo:'idle'});
+  persist(); renderStores();
+}
+
+/* ---------------- txt import/export ---------------- */
+function importTxt(){
+  const text = document.getElementById('txtImport').value.trim();
+  if(!text) return;
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  lines.forEach((line, idx)=>{
+    const [name, ...rest] = line.split(',');
+    const address = rest.join(',').trim();
+    if(!name || !address) return;
+    stores.push({
+      id:uid(), name:name.trim(), address,
+      role: stores.length===0 && idx===0 ? 'start' : 'waypoint',
+      lat:null,lng:null,geo:'idle'
+    });
+  });
+  persist(); renderStores();
+}
+function exportTxt(){
+  const text = stores.map(s=>`${s.name},${s.address}`).join('\n');
+  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_list.txt';
+  a.click();
+}
+
+/* ---------------- geocoding (Kakao Local REST API) ---------------- */
+async function geocodeOne(s){
+  const restKey = localStorage.getItem(LS_RESTKEY);
+  if(!restKey){ s.geo='err'; return s; }
+  s.geo='pending'; renderStores();
+  try{
+    const res = await fetch(`https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(s.address)}`, {
+      headers: { Authorization: `KakaoAK ${restKey}` }
+    });
+    const data = await res.json();
+    if(data.documents && data.documents.length>0){
+      s.lat = parseFloat(data.documents[0].y);
+      s.lng = parseFloat(data.documents[0].x);
+      s.geo = 'ok';
+    } else {
+      s.geo = 'err';
+    }
+  }catch(e){ s.geo = 'err'; }
+  persist();
+  return s;
+}
+async function geocodeAll(){
+  const restKey = localStorage.getItem(LS_RESTKEY);
+  if(!restKey){ alert('REST API 키를 먼저 설정하세요 (상단 API 키 설정).'); toggleSettings(); return; }
+  const btn = document.getElementById('geocodeBtn');
+  btn.disabled = true; btn.textContent = '확인 중...';
+  for(const s of stores){
+    if(s.address.trim()) await geocodeOne(s);
+  }
+  btn.disabled = false; btn.textContent = '전체 주소 좌표 확인';
+  renderStores();
+}
+
+/* ---------------- distance & route optimization ---------------- */
+function haversine(a, b){
+  const R = 6371;
+  const dLat = (b.lat-a.lat) * Math.PI/180;
+  const dLng = (b.lng-a.lng) * Math.PI/180;
+  const lat1 = a.lat * Math.PI/180, lat2 = b.lat * Math.PI/180;
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+// fixed start/end, optimize order of middle waypoints
+function optimizeRoute(start, waypoints, end){
+  const n = waypoints.length;
+  if(n === 0) return { order: [], totalDist: haversine(start, end) };
+  if(n <= 13){
+    // Held-Karp DP
+    const dist = (p,q)=>haversine(p,q);
+    const full = (1<<n) - 1;
+    const dp = Array.from({length:1<<n}, ()=>Array(n).fill(Infinity));
+    const parent = Array.from({length:1<<n}, ()=>Array(n).fill(-1));
+    for(let j=0;j<n;j++){ dp[1<<j][j] = dist(start, waypoints[j]); }
+    for(let mask=1; mask<=full; mask++){
+      for(let j=0;j<n;j++){
+        if(!(mask & (1<<j))) continue;
+        if(dp[mask][j] === Infinity) continue;
+        for(let k=0;k<n;k++){
+          if(mask & (1<<k)) continue;
+          const nmask = mask | (1<<k);
+          const nd = dp[mask][j] + dist(waypoints[j], waypoints[k]);
+          if(nd < dp[nmask][k]){ dp[nmask][k] = nd; parent[nmask][k] = j; }
+        }
+      }
+    }
+    let best = Infinity, bestJ = -1;
+    for(let j=0;j<n;j++){
+      const total = dp[full][j] + dist(waypoints[j], end);
+      if(total < best){ best = total; bestJ = j; }
+    }
+    const order = [];
+    let mask = full, j = bestJ;
+    while(j !== -1){
+      order.unshift(j);
+      const pj = parent[mask][j];
+      mask = mask ^ (1<<j);
+      j = pj;
+    }
+    return { order: order.map(i=>waypoints[i]), totalDist: best };
+  } else {
+    // nearest-neighbor + 2-opt fallback for large lists
+    let remaining = waypoints.slice();
+    let order = [];
+    let cur = start;
+    while(remaining.length){
+      let bi=0, bd=Infinity;
+      remaining.forEach((p,i)=>{ const d=haversine(cur,p); if(d<bd){bd=d;bi=i;} });
+      cur = remaining.splice(bi,1)[0];
+      order.push(cur);
+    }
+    order.push(end);
+    const full = [start, ...order];
+    function pathLen(path){
+      let d=0; for(let i=0;i<path.length-1;i++) d+=haversine(path[i],path[i+1]);
+      return d;
+    }
+    let improved = true;
+    while(improved){
+      improved = false;
+      for(let i=1;i<full.length-2;i++){
+        for(let k=i+1;k<full.length-1;k++){
+          const nf = full.slice(0,i).concat(full.slice(i,k+1).reverse(), full.slice(k+1));
+          if(pathLen(nf) < pathLen(full) - 1e-6){ full.splice(0,full.length,...nf); improved = true; }
+        }
+      }
+    }
+    const finalOrder = full.slice(1, full.length-1);
+    return { order: finalOrder, totalDist: pathLen(full) };
+  }
+}
+
+/* ---------------- draw & compute ---------------- */
+async function computeAndDraw(){
+  const note = document.getElementById('calcNote');
+  const startS = stores.find(s=>s.role==='start');
+  const endS = stores.find(s=>s.role==='end');
+  if(!startS || !endS){ note.textContent = '출발지와 도착지를 각각 한 곳씩 지정하세요.'; return; }
+  if(startS.id === endS.id){ note.textContent = '출발지와 도착지는 서로 달라야 합니다.'; return; }
+
+  const missing = stores.filter(s=>s.address.trim() && s.geo!=='ok');
+  if(missing.length){
+    note.textContent = '좌표 미확인 점포가 있어 좌표를 먼저 확인합니다...';
+    for(const s of missing) await geocodeOne(s);
+    renderStores();
+  }
+  const usable = stores.filter(s=> s.geo==='ok');
+  const start = usable.find(s=>s.role==='start');
+  const end = usable.find(s=>s.role==='end');
+  if(!start || !end){ note.textContent = '출발/도착 주소의 좌표를 확인할 수 없습니다. 주소를 다시 확인하세요.'; return; }
+  const waypoints = usable.filter(s=>s.role==='waypoint');
+
+  const result = optimizeRoute(start, waypoints, end);
+  const orderedStores = [start, ...result.order, end];
+  note.textContent = `계산 완료 · 총 직선거리 약 ${result.totalDist.toFixed(1)}km (경유지 ${waypoints.length}곳)`;
+
+  renderTimeline(orderedStores, result.totalDist);
+  drawOnMap(orderedStores);
+}
+
+function renderTimeline(ordered, totalDist){
+  const wrap = document.getElementById('timeline');
+  wrap.innerHTML = '';
+  const tl = document.createElement('div');
+  tl.className = 'tl';
+  ordered.forEach((s, idx) => {
+    const item = document.createElement('div');
+    const cls = idx===0 ? 'start' : (idx===ordered.length-1 ? 'end' : '');
+    item.className = 'tl-item ' + cls;
+    let seg = '';
+    if(idx < ordered.length-1){
+      const d = haversine(s, ordered[idx+1]);
+      seg = `<div class="tl-seg">↓ ${d.toFixed(1)}km</div>`;
+    }
+    item.innerHTML = `
+      <div class="tl-name">${idx+1}. ${escapeHtml(s.name)} ${idx===0?'(출발)':(idx===ordered.length-1?'(도착)':'')}</div>
+      <div class="tl-addr">${escapeHtml(s.address)}</div>
+      ${seg}
+    `;
+    tl.appendChild(item);
+  });
+  wrap.appendChild(tl);
+  const total = document.createElement('div');
+  total.className = 'tl-total';
+  total.textContent = `총 이동거리(직선) 약 ${totalDist.toFixed(1)}km`;
+  wrap.appendChild(total);
+}
+
+function drawOnMap(ordered){
+  if(!map){ document.getElementById('calcNote').textContent += ' · 지도가 로드되지 않아 동선 리스트만 표시합니다. 상단 API 키 설정을 확인하세요.'; return; }
+  markers.forEach(m=>m.setMap(null));
+  markers = [];
+  if(polyline) polyline.setMap(null);
+
+  const bounds = new kakao.maps.LatLngBounds();
+  const path = [];
+  ordered.forEach((s, idx)=>{
+    const pos = new kakao.maps.LatLng(s.lat, s.lng);
+    path.push(pos);
+    bounds.extend(pos);
+    const color = idx===0 ? '#1E8A5B' : (idx===ordered.length-1 ? '#C0392B' : '#2F4B7C');
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background:${color}; color:#fff; font-family:'JetBrains Mono',monospace;
+      font-size:11px; font-weight:600; width:22px; height:22px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center; border:2px solid #fff;
+      box-shadow:0 1px 4px rgba(0,0,0,.3);
+    `;
+    content.textContent = idx+1;
+    const overlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 0.5 });
+    overlay.setMap(map);
+    markers.push(overlay);
+  });
+  polyline = new kakao.maps.Polyline({
+    path, strokeWeight: 4, strokeColor: '#D8A31A', strokeOpacity: 0.85, strokeStyle: 'solid'
+  });
+  polyline.setMap(map);
+  map.setBounds(bounds);
+}
+
+/* ---------------- init ---------------- */
+window.addEventListener('DOMContentLoaded', () => {
+  loadState();
+  renderStores();
+  const js = localStorage.getItem(LS_JSKEY);
+  if(js){
+    loadKakaoSdk(js, initMap, ()=>{
+      document.getElementById('calcNote').textContent = '지도 로드 실패 - 상단에서 API 키/도메인 등록을 확인하세요.';
+    });
+  }
+});
+</script>
+</body>
+</html>
